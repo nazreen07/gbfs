@@ -1,20 +1,4 @@
-# Requirement
-# umob DevOps engineering hiring assignment
-## Introduction
-
-- The purpose of the assignment is to test your ability to:
-	- Document and communicate your way of thinking.
-	- Design and build a functional, scalable and observable infrastructure.
-- Invest maximum 6 hours over 1 week.
-
-We hope you have fun building this! 
-## Deliverables
-- A git repo with:
-	- Source code.
-	- Instructions to build and run.
-	- Architecture overview.
-	- Things you would change if you had more time.
-## The assignment: Fun with GBFS
+Fun with GBFS
 - GBFS is a simple standard for publishing bike sharing feeds. https://github.com/MobilityData/gbfs/blob/master/gbfs.md
 ### Requirements
 - Choose 3 providers of GBFS from this list https://github.com/MobilityData/gbfs/blob/master/systems.csv
