@@ -1,0 +1,65 @@
+# ConfigMap to store provider URLs and regions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gbfs-providers
+  namespace: umob
+data:
+  provider1_url: "https://gbfs.api.ridedott.com/public/v2/aalst/gbfs.json"
+  provider1_region: "Aalst"
+  provider2_url: "https://www.sharedmobility.ch/gbfs.json"
+  provider2_region: "Switzerland"
+  provider3_url: "https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_vr/gbfs.json"
+  provider3_region: "Vrchlabi"
+  # Add more providers as needed, e.g., provider4_url and provider4_region
+
+
+---
+# Deployment that uses the ConfigMap
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-go-app
+  namespace: umob
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-go-app
+  template:
+    metadata:
+      labels:
+        app: my-go-app
+    spec:
+      containers:
+      - name: my-go-app
+        image: umobacr.azurecr.io/my-go-app:latest
+        ports:
+        - containerPort: 8080
+        # Use envFrom to load all ConfigMap entries as environment variables dynamically
+        envFrom:
+        - configMapRef:
+            name: gbfs-providers
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+
+---
+# Service for the Go app
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-go-app-service
+  namespace: umob
+spec:
+  selector:
+    app: my-go-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

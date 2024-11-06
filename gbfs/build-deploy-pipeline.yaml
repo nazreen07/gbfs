@@ -1,0 +1,99 @@
+trigger: none
+
+pool:
+  name: azureagent  # Use the agent pool you have set up
+
+# Define parameters
+parameters:
+  - name: aksResourceGroup
+    type: string
+    default: 'agent_group'  # Default AKS resource group
+    displayName: 'AKS Resource Group'
+  - name: aksClusterName
+    type: string
+    default: 'aks005'  # Default AKS cluster name
+    displayName: 'AKS Cluster Name'
+  - name: azureSubscription
+    type: string
+    default: 'umob-svc-connection'  # Default Azure subscription connection
+    displayName: 'Azure Subscription Connection'
+  - name: acrName
+    type: string
+    default: 'umobacr'  # Default ACR name
+    displayName: 'ACR Name'
+  - name: imageName
+    type: string
+    default: 'my-go-app'  # Default value for the Docker image name
+    displayName: 'Docker Image Name'
+  - name: tag
+    type: string
+    default: 'latest'  # Default tag for the Docker image
+    displayName: 'Docker Image Tag'
+  - name: kubeconfigPath
+    type: string
+    default: '$(Pipeline.Workspace)/config'  # Default location to store kubeconfig
+    displayName: 'Kubeconfig Path'
+
+steps:
+  # Checkout the repository code
+  - checkout: self  
+    displayName: 'Checkout Code'
+
+  # Add a step to check Docker status and Dockerfile location
+  - script: |
+      echo "Checking Docker service status..."
+      sudo systemctl status docker
+      echo "Checking Dockerfile location..."
+      ls -al /home/azureuser/myagent/_work/1/s/code  # Adjust path to the Dockerfile if needed
+    displayName: 'Check Docker Status and Dockerfile'
+
+  # Build and push the Docker image to ACR
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: ${{ parameters.azureSubscription }}  # Parameterized Azure subscription
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Log in to ACR
+        az acr login --name ${{ parameters.acrName }}
+
+        # Build the Docker image using the Dockerfile in the 'code' directory
+        docker build -t ${{ parameters.acrName }}.azurecr.io/${{ parameters.imageName }}:${{ parameters.tag }} ./code  # Use ./code as the build context
+
+        # Push the Docker image to Azure Container Registry
+        docker push ${{ parameters.acrName }}.azurecr.io/${{ parameters.imageName }}:${{ parameters.tag }}
+    displayName: 'Build and Push Docker Image to ACR'
+
+  # Copy Kubernetes manifest files (deployment.yaml, ingress.yaml, svc.yaml) from the 'config' folder to the working directory
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: '/home/azureuser/myagent/_work/1/s/config'  # Manifest files are in the 'config' folder
+      Contents: '**/*.yaml'
+      TargetFolder: '/home/azureuser/myagent/_work/_temp/k8s-manifests/'
+    displayName: 'Copy Kubernetes Manifests'
+
+  # Deploy to AKS Cluster
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: ${{ parameters.azureSubscription }}  # Parameterized Azure subscription
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Install kubectl if not already installed, using user writable directory
+        mkdir -p $HOME/.kubectl
+        curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x ./kubectl
+        mv ./kubectl $HOME/.kubectl/
+        export PATH=$HOME/.kubectl:$PATH
+
+        # Get credentials for the AKS cluster and store them in kubeconfig, overwrite if necessary
+        az aks get-credentials --resource-group ${{ parameters.aksResourceGroup }} --name ${{ parameters.aksClusterName }} --file ${{ parameters.kubeconfigPath }} --overwrite-existing
+
+        # Get or create namespace
+        kubectl --kubeconfig=${{ parameters.kubeconfigPath }} get namespace umob || kubectl --kubeconfig=${{ parameters.kubeconfigPath }} create namespace umob
+
+        # Apply the Kubernetes manifest files (deployment.yaml, svc.yaml, ingress.yaml)
+        kubectl --kubeconfig=${{ parameters.kubeconfigPath }} apply -f /home/azureuser/myagent/_work/_temp/k8s-manifests/deployment.yaml
+        kubectl --kubeconfig=${{ parameters.kubeconfigPath }} apply -f /home/azureuser/myagent/_work/_temp/k8s-manifests/prometheus.yaml
+        kubectl --kubeconfig=${{ parameters.kubeconfigPath }} apply -f /home/azureuser/myagent/_work/_temp/k8s-manifests/grafana.yaml
+    displayName: 'Deploy to AKS'

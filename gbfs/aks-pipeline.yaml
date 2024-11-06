@@ -1,0 +1,57 @@
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+parameters:
+  - name: clusterName
+    default: 'aks005'
+    displayName: 'AKS Cluster Name'
+  - name: location
+    default: 'East US 2'
+    displayName: 'Location'
+  - name: agentCount
+    default: '2'  # Keep as a string and convert in script if needed
+    displayName: 'Number of Nodes'
+  - name: agentVMSize
+    default: 'standard_a2_v2'
+    displayName: 'VM Size'
+  - name: linuxAdminUsername
+    default: 'azureuser'
+    displayName: 'Linux Admin Username'
+  - name: sshRSAPublicKey
+    default: 'ssh-rsa AAAAB3... your ssh key ...'
+    displayName: 'SSH RSA Public Key'
+
+steps:
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: 'umob-svc-connection'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      # Copy template files
+      cp ./templates/template.json .
+      cp ./templates/parameters.json .
+
+      # Use jq to update parameters.json with pipeline parameters
+      jq --arg clusterName "${{ parameters.clusterName }}" \
+         --arg location "${{ parameters.location }}" \
+         --arg agentCount "${{ parameters.agentCount }}" \
+         --arg agentVMSize "${{ parameters.agentVMSize }}" \
+         --arg linuxAdminUsername "${{ parameters.linuxAdminUsername }}" \
+         --arg sshRSAPublicKey "${{ parameters.sshRSAPublicKey }}" \
+         '.parameters.clusterName.value = $clusterName |
+          .parameters.location.value = $location |
+          .parameters.agentCount.value = ($agentCount|tonumber) |  # Convert to number
+          .parameters.agentVMSize.value = $agentVMSize |
+          .parameters.linuxAdminUsername.value = $linuxAdminUsername |
+          .parameters.sshRSAPublicKey.value = $sshRSAPublicKey' \
+         parameters.json > updated-parameters.json
+
+      # Deploy using the updated parameters file
+      az deployment group create \
+        --resource-group agent_group \
+        --template-file ./templates/template.json \
+        --parameters ./updated-parameters.json
+    workingDirectory: $(System.DefaultWorkingDirectory)

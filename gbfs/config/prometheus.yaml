@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: umob
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  namespace: umob
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/prometheus/
+      volumes:
+      - name: config-volume
+        configMap:
+          name: prometheus-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: umob
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 9090
+    targetPort: 9090
+  selector:
+    app: prometheus
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: umob
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          # Scraping Prometheus itself
+          - targets: ['prometheus-service.umob.svc.cluster.local:9090']
+      - job_name: 'my-go-app'
+        static_configs:
+          # Scraping my-go-app via ClusterIP service
+          - targets: ['my-go-app-service.umob.svc.cluster.local:8080']

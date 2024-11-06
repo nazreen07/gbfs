@@ -1,0 +1,60 @@
+trigger: none
+
+pool:
+  name: azureagent  # Use the agent pool you have set up
+
+# Define parameters
+parameters:
+  - name: aksResourceGroup
+    type: string
+    default: 'agent_group'  # Default AKS resource group
+    displayName: 'AKS Resource Group'
+  - name: aksClusterName
+    type: string
+    default: 'aks005'  # Default AKS cluster name
+    displayName: 'AKS Cluster Name'
+  - name: acrName
+    type: string
+    default: 'umobacr'  # Default ACR name
+    displayName: 'ACR Name'
+
+steps:
+  # Checkout the repository code
+  - checkout: self  
+    displayName: 'Checkout Code'
+
+  # Create Role Assignment and List Role Assignment for the Service Principal
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: 'umob-svc-connection'  # Replace with your Azure service connection name
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        echo "Creating role assignment for the service principal..."
+
+        # Create role assignment for the ACR
+        az role assignment create --assignee dba8eb9e-8956-4c3a-877b-3f2275d2c830 --role Owner --scope $(az acr show --name ${{ parameters.acrName }} --query id --output tsv)
+
+        echo "Listing role assignments for verification..."
+        
+        # List the role assignment for the service principal
+        az role assignment list --assignee dba8eb9e-8956-4c3a-877b-3f2275d2c830 --scope $(az acr show --name ${{ parameters.acrName }} --query id --output tsv) --output table
+    displayName: 'Create and List Role Assignment'
+
+  # Attach ACR to AKS Cluster and Get AKS Identity Client ID
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: 'umob-svc-connection'  # Replace with your Azure service connection name
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        echo "Attaching ACR to AKS Cluster..."
+
+        # Attach the ACR to the AKS cluster
+        az aks update -g ${{ parameters.aksResourceGroup }} -n ${{ parameters.aksClusterName }} --attach-acr ${{ parameters.acrName }}
+
+        echo "Fetching the AKS managed identity client ID..."
+
+        # Fetch and display the managed identity client ID for AKS
+        az aks show --resource-group ${{ parameters.aksResourceGroup }} --name ${{ parameters.aksClusterName }} --query identityProfile.kubeletidentity.clientId -o tsv
+    displayName: 'Attach ACR to AKS and Show AKS Managed Identity'

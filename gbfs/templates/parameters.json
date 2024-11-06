@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "clusterName": {
+      "value": "aks005"
+    },
+    "location": {
+      "value": "East US 2"
+    },
+    "dnsPrefix": {
+      "value": null
+    },
+    "osDiskSizeGB": {
+      "value": null
+    },
+    "agentCount": {
+      "value": 2
+    },
+    "agentVMSize": {
+      "value": "standard_a2_v2"
+    },
+    "linuxAdminUsername": {
+      "value": "azureuser"
+    },
+    "sshRSAPublicKey": {
+      "value": "ssh-rsa XXXXXX"
+    }
+  }
+}
